@@ -68,5 +68,5 @@ subsets:
           name: myapp-deployment-6786bf95fd-fnqnq
     ports:
       - name: web
-        port: 8080
+        port: 80
         protocol: TCP
