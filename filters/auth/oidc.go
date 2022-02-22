@@ -327,7 +327,7 @@ func (f *tokenOidcFilter) internalServerError(ctx filters.FilterContext) {
 // https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowSteps
 // 1. Client prepares an Authentication Request containing the desired request parameters.
 // 2. Client sends the request to the Authorization Server.
-func (f *tokenOidcFilter) doOauthRedirect(ctx filters.FilterContext) {
+func (f *tokenOidcFilter) doOauthRedirect(ctx filters.FilterContext, cookies ...*http.Cookie) {
 	nonce, err := f.encrypter.CreateNonce()
 	if err != nil {
 		log.Errorf("Failed to create nonce: %v.", err)
@@ -367,6 +367,9 @@ func (f *tokenOidcFilter) doOauthRedirect(ctx filters.FilterContext) {
 		},
 		StatusCode: http.StatusTemporaryRedirect,
 		Status:     "Moved Temporarily",
+	}
+	for _, cookie := range cookies {
+		rsp.Header.Add("Set-Cookie", cookie.String())
 	}
 	log.Debugf("serve redirect: plaintextState:%s to Location: %s", statePlain, rsp.Header.Get("Location"))
 	ctx.Serve(rsp)
@@ -698,7 +701,20 @@ func (f *tokenOidcFilter) Request(ctx filters.FilterContext) {
 			return
 		}
 		// 1. Client prepares an Authentication Request containing the desired request parameters.
-		f.doOauthRedirect(ctx)
+		// clear existing, invalid cookies
+		var purgeCookies = make([]*http.Cookie, len(cookies))
+		for i, c := range cookies {
+			purgeCookies[i] = &http.Cookie{
+				Name:     c.Name,
+				Value:    "",
+				Path:     "/",
+				Domain:   extractDomainFromHost(ctx.Request().Host, 1),
+				MaxAge:   -1,
+				Secure:   true,
+				HttpOnly: true,
+			}
+		}
+		f.doOauthRedirect(ctx, purgeCookies...)
 		return
 	}
 
