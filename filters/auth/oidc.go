@@ -404,7 +404,23 @@ func getHost(request *http.Request) string {
 	}
 }
 
-func chunkCookie(cookie http.Cookie) (cookies []http.Cookie) {
+func createOidcCookie(name string, value string, maxAge int, domain string) (cookie *http.Cookie) {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		Domain:   domain,
+	}
+}
+
+func deleteOidcCookie(name string, domain string) (cookie *http.Cookie) {
+	return createOidcCookie(name, "", -1, domain)
+}
+
+func chunkCookie(cookie *http.Cookie) (cookies []*http.Cookie) {
 	for index := 'a'; index <= 'z'; index++ {
 		cookieSize := len(cookie.String())
 		if cookieSize < cookieMaxSize {
@@ -423,11 +439,11 @@ func chunkCookie(cookie http.Cookie) (cookies []http.Cookie) {
 	return
 }
 
-func mergerCookies(cookies []http.Cookie) (cookie http.Cookie) {
+func mergerCookies(cookies []*http.Cookie) (cookie http.Cookie) {
 	if len(cookies) == 0 {
 		return
 	}
-	cookie = cookies[0]
+	cookie = *(cookies[0])
 	cookie.Name = cookie.Name[:len(cookie.Name)-1]
 	cookie.Value = ""
 	// potentially shuffeled
@@ -448,16 +464,12 @@ func (f *tokenOidcFilter) doDownstreamRedirect(ctx filters.FilterContext, oidcSt
 			"Location": {redirectUrl},
 		},
 	}
-
-	oidcCookies := chunkCookie(http.Cookie{
-		Name:     f.cookiename,
-		Value:    base64.StdEncoding.EncodeToString(oidcState),
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		MaxAge:   int(maxAge.Seconds()),
-		Domain:   extractDomainFromHost(getHost(ctx.Request()), f.subdomainsToRemove),
-	})
+	oidcCookies := chunkCookie(createOidcCookie(
+		f.cookiename,
+		base64.StdEncoding.EncodeToString(oidcState),
+		int(maxAge.Seconds()),
+		extractDomainFromHost(getHost(ctx.Request()),
+			f.subdomainsToRemove)))
 	for _, cookie := range oidcCookies {
 		r.Header.Add("Set-Cookie", cookie.String())
 	}
@@ -679,14 +691,14 @@ func (f *tokenOidcFilter) getMaxAge(claimsMap map[string]interface{}) time.Durat
 func (f *tokenOidcFilter) Request(ctx filters.FilterContext) {
 	var (
 		allowed   bool
-		cookies   []http.Cookie
+		cookies   []*http.Cookie
 		container tokenContainer
 	)
 	r := ctx.Request()
 
 	for _, cookie := range r.Cookies() {
 		if strings.HasPrefix(cookie.Name, f.cookiename) {
-			cookies = append(cookies, *cookie)
+			cookies = append(cookies, cookie)
 		}
 	}
 	sessionCookie := mergerCookies(cookies)
@@ -704,15 +716,7 @@ func (f *tokenOidcFilter) Request(ctx filters.FilterContext) {
 		// clear existing, invalid cookies
 		var purgeCookies = make([]*http.Cookie, len(cookies))
 		for i, c := range cookies {
-			purgeCookies[i] = &http.Cookie{
-				Name:     c.Name,
-				Value:    "",
-				Path:     "/",
-				Domain:   extractDomainFromHost(ctx.Request().Host, 1),
-				MaxAge:   -1,
-				Secure:   true,
-				HttpOnly: true,
-			}
+			purgeCookies[i] = deleteOidcCookie(c.Name, extractDomainFromHost(ctx.Request().Host, 1))
 		}
 		f.doOauthRedirect(ctx, purgeCookies...)
 		return
