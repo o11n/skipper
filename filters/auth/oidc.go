@@ -421,19 +421,22 @@ func deleteOidcCookie(name string, domain string) (cookie *http.Cookie) {
 }
 
 func chunkCookie(cookie *http.Cookie) (cookies []*http.Cookie) {
+	// We need to dereference the cookie to avoid modifying the original cookie.
+	cookieCopy := *cookie
+
 	for index := 'a'; index <= 'z'; index++ {
-		cookieSize := len(cookie.String())
+		cookieSize := len(cookieCopy.String())
 		if cookieSize < cookieMaxSize {
-			cookie.Name += string(index)
-			return append(cookies, cookie)
+			cookieCopy.Name += string(index)
+			return append(cookies, &cookieCopy)
 		}
 
-		newCookie := cookie
+		newCookie := cookieCopy
 		newCookie.Name += string(index)
 		// non-deterministic approach support signature changes
-		cut := len(cookie.Value) - (cookieSize - cookieMaxSize) - 1
-		newCookie.Value, cookie.Value = cookie.Value[:cut], cookie.Value[cut:]
-		cookies = append(cookies, newCookie)
+		cut := len(cookieCopy.Value) - (cookieSize - cookieMaxSize) - 1
+		newCookie.Value, cookieCopy.Value = cookieCopy.Value[:cut], cookieCopy.Value[cut:]
+		cookies = append(cookies, &newCookie)
 	}
 	log.Error("unsupported amount of chunked cookies")
 	return
