@@ -921,7 +921,7 @@ func TestChunkAndMergerCookie(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("test:%v", ht.name), func(t *testing.T) {
 			assert := assert.New(t)
-			got := chunkCookie(&ht.given)
+			got := chunkCookie(ht.given)
 			assert.NotNil(t, got, "it should not be empty")
 			// shuffle the order of response cookies
 			rand.Shuffle(len(got), func(i, j int) {
