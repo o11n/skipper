@@ -420,12 +420,12 @@ func deleteOidcCookie(name string, domain string) (cookie *http.Cookie) {
 	return createOidcCookie(name, "", -1, domain)
 }
 
-func chunkCookie(cookie *http.Cookie) (cookies []*http.Cookie) {
+func chunkCookie(cookie http.Cookie) (cookies []*http.Cookie) {
 	for index := 'a'; index <= 'z'; index++ {
 		cookieSize := len(cookie.String())
 		if cookieSize < cookieMaxSize {
 			cookie.Name += string(index)
-			return append(cookies, cookie)
+			return append(cookies, &cookie)
 		}
 
 		newCookie := cookie
@@ -433,7 +433,7 @@ func chunkCookie(cookie *http.Cookie) (cookies []*http.Cookie) {
 		// non-deterministic approach support signature changes
 		cut := len(cookie.Value) - (cookieSize - cookieMaxSize) - 1
 		newCookie.Value, cookie.Value = cookie.Value[:cut], cookie.Value[cut:]
-		cookies = append(cookies, newCookie)
+		cookies = append(cookies, &newCookie)
 	}
 	log.Error("unsupported amount of chunked cookies")
 	return
@@ -464,7 +464,7 @@ func (f *tokenOidcFilter) doDownstreamRedirect(ctx filters.FilterContext, oidcSt
 			"Location": {redirectUrl},
 		},
 	}
-	oidcCookies := chunkCookie(createOidcCookie(
+	oidcCookies := chunkCookie(*createOidcCookie(
 		f.cookiename,
 		base64.StdEncoding.EncodeToString(oidcState),
 		int(maxAge.Seconds()),
